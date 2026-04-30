@@ -1,0 +1,192 @@
+<style>  #search {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 8px 10px;
+      outline: none;
+    }
+
+    .status {
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      font-size: 12px;
+    }
+
+    .error {
+      color: var(--error);
+      margin-bottom: 10px;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      position: relative;
+      aspect-ratio: 1 / 1;
+      border-radius: 16px;
+      overflow: hidden;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--panel);
+    }
+
+    .thumb {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: filter 0.2s ease, transform 0.2s ease;
+    }
+
+    .title {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 500;
+      text-align: center;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      background: rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(6px);
+    }
+
+    .card:hover .thumb {
+      filter: blur(6px) brightness(0.7);
+      transform: scale(1.05);
+    }
+
+    .card:hover .title {
+      opacity: 1;
+    }
+</style>
+<main class="wrap">
+    <h1>Games</h1>
+    <h6>credits to gn-math cs im lazy</h6>
+
+    <div class="toolbar">
+      <input id="search" placeholder="Search..." />
+      <div class="status"><span id="count">0</span></div>
+    </div>
+
+    <div id="error" class="error" hidden></div>
+    <section id="cards" class="cards"></section>
+  </main>
+<script>
+       const BASES = [
+      "https://cdn.jsdelivr.net/gh/Hydra-Network/hydra-assets@main/",
+      "https://raw.githubusercontent.com/Hydra-Network/hydra-assets/main/",
+      "https://raw.githack.com/Hydra-Network/hydra-assets/main/"
+    ];
+
+    const JSON_PATH = "gmes.json";
+    const GAME_PREFIX = "gmes/";
+    const THUMB_PREFIX = "/";
+
+    let games = [];
+
+    const elCards = document.getElementById("cards");
+    const elSearch = document.getElementById("search");
+    const elCount = document.getElementById("count");
+    const elError = document.getElementById("error");
+
+    function showError(msg) {
+      elError.hidden = false;
+      elError.textContent = msg;
+    }
+
+    async function fetchJSON() {
+      for (const base of BASES) {
+        try {
+          const res = await fetch(base + JSON_PATH);
+          if (!res.ok) continue;
+          return await res.json();
+        } catch {}
+      }
+      throw new Error();
+    }
+
+    async function fetchGame(path) {
+      for (const base of BASES) {
+        try {
+          const res = await fetch(base + GAME_PREFIX + path);
+          if (!res.ok) continue;
+          return await res.text();
+        } catch {}
+      }
+      throw new Error();
+    }
+
+    function buildImage(path) {
+      if (!path) return "";
+      const clean = path.replace(/^\/+/, '');
+
+      return `
+        <img class="thumb"
+          src="${BASES[0] + THUMB_PREFIX + clean}"
+          onerror="
+            if (!this.dataset.fallback) {
+              this.dataset.fallback = 1;
+              this.src='${BASES[1] + THUMB_PREFIX + clean}';
+            } else if (this.dataset.fallback == 1) {
+              this.dataset.fallback = 2;
+              this.src='${BASES[2] + THUMB_PREFIX + clean}';
+            }
+          "
+        >
+      `;
+    }
+
+    function render(data, q = "") {
+      const filtered = data.filter(g =>
+        (g.title + g.file_name).toLowerCase().includes(q.toLowerCase())
+      );
+
+      elCards.innerHTML = filtered.map(g => `
+        <div class="card" data-path="${g.file_name}">
+          ${buildImage(g.thumb)}
+          <div class="title">${g.title}</div>
+        </div>
+      `).join("");
+
+      elCount.textContent = filtered.length;
+
+      document.querySelectorAll(".card").forEach(el => {
+        el.onclick = () => loadGame(el.dataset.path);
+      });
+    }
+
+    function injectSafe(html) {
+      const safe = html.replace(/<\/script>/gi, '</scr' + 'ipt>');
+      document.open();
+      document.write(safe);
+      document.close();
+    }
+
+    async function loadGame(path) {
+      try {
+        const html = await fetchGame(path);
+        injectSafe(html);
+      } catch {
+        showError("Failed to load game.");
+      }
+    }
+
+    elSearch.oninput = e => render(games, e.target.value);
+
+    (async () => {
+      try {
+        games = await fetchJSON();
+        render(games);
+      } catch {
+        showError("Failed to load games list.");
+      }
+    })();
+
+</script>
